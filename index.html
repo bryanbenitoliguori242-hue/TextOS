@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TextOS Ultimate - Local FS & GUI</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --text-color: #00ff41;
+            --font-size: 14px;
+            --overlay-opacity: 0.3;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            color: var(--text-color);
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            margin: 0; padding: 0;
+            display: flex; flex-direction: column;
+            height: 100vh; width: 100vw;
+            box-sizing: border-box;
+            overflow: hidden;
+            transition: filter 0.3s ease;
+        }
+
+        #os-interface {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+            background: rgba(0, 0, 0, var(--overlay-opacity));
+        }
+
+        body.eco { --text-color: #006622; filter: brightness(0.5); }
+
+        body.portrait { 
+            width: 380px; height: 680px; 
+            margin: auto; border: 8px solid #222; 
+            border-radius: 30px; 
+            position: relative;
+        }
+
+        #terminal {
+            flex-grow: 1;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            padding-bottom: 10px;
+            scrollbar-width: none;
+            text-shadow: 1px 1px 2px #000;
+        }
+        #terminal::-webkit-scrollbar { display: none; }
+
+        #input-area { 
+            display: flex; 
+            align-items: center; 
+            border-top: 1px solid rgba(0, 255, 65, 0.2); 
+            padding-top: 10px; 
+            background: rgba(0,0,0,0.5);
+        }
+        #prompt { color: #fff; font-weight: bold; margin-right: 10px; }
+        
+        input {
+            background: transparent; border: none; color: inherit;
+            font-family: inherit; font-size: var(--font-size);
+            outline: none; flex-grow: 1;
+        }
+
+        #app-container {
+            display: none; position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%; background: #000; z-index: 1000;
+        }
+        iframe { width: 100%; height: 100%; border: none; }
+        .close-btn {
+            position: absolute; top: 20px; right: 20px;
+            background: #ff0000; color: white; border: none;
+            padding: 10px 15px; cursor: pointer; z-index: 1001; font-weight: bold;
+        }
+    </style>
+</head>
+<body onclick="document.getElementById('cmd').focus()">
+
+    <div id="os-interface">
+        <div id="terminal">--- TextOS Kernel v3.1 [GUI Support Enabled] ---
+Stato: PROTETTO. Digita 'start pin ****' per sbloccare.
+---------------------------------------------------------</div>
+
+        <div id="input-area">
+            <span id="prompt">ROOT@ANDROID:~$</span>
+            <input type="text" id="cmd" autofocus spellcheck="false" autocomplete="off">
+        </div>
+    </div>
+
+    <div id="app-container">
+        <button class="close-btn" onclick="closeApp()">CHIUDI APP/GUI</button>
+        <iframe id="viewport"></iframe>
+    </div>
+
+    <script>
+        const term = document.getElementById('terminal');
+        const cmdInput = document.getElementById('cmd');
+        const appContainer = document.getElementById('app-container');
+        const viewport = document.getElementById('viewport');
+        const body = document.body;
+
+        let isUnlocked = false;
+        let apps = {};
+        let dirHandle = null;
+
+        cmdInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const val = cmdInput.value.trim();
+                if (val) processCommand(val);
+                cmdInput.value = '';
+            }
+        });
+
+        function print(text, type = '') {
+            const line = document.createElement('div');
+            line.textContent = type === 'cmd' ? `> ${text}` : text;
+            if (type === 'err') line.style.color = '#ff4444';
+            if (type === 'success') line.style.color = '#ffff00';
+            term.appendChild(line);
+            term.scrollTop = term.scrollHeight;
+        }
+
+        async function processCommand(raw) {
+            print(raw, 'cmd');
+            const args = raw.split(' ');
+            const command = args[0].toLowerCase();
+
+            if (command === 'start' && args[1] === 'pin' && args[2] === '2580') {
+                isUnlocked = true;
+                print("Kernel sbloccato. Privilegi ROOT ottenuti.", "success");
+                return;
+            }
+
+            if (!isUnlocked) {
+                print("ERRORE: Inserire PIN 'start pin 2580'", "err");
+                return;
+            }
+
+            switch(command) {
+                case 'help':
+                    print(`COMANDI:
+- start_shell                   : Avvia GUI (richiede gui_style.css)
+- ls                            : Monta/Elenca cartella locale
+- checkm8                       : Fullscreen
+- install <url> name <nome>     : Installa App Web
+- start app <nome>              : Lancia App
+- set ecology mode on/off       : Risparmio energetico
+- lumos set <n>%                : Luminosità
+- config mode potrait/landscape : Layout
+- battery                       : Info batteria
+- clear                         : Pulisci schermo`);
+                    break;
+
+                case 'start_shell':
+                    if (!dirHandle) {
+                        print("Errore: Esegui prima 'ls' per montare la cartella.", "err");
+                        break;
+                    }
+                    try {
+                        const cssHandle = await dirHandle.getFileHandle('gui_style.css');
+                        const cssFile = await cssHandle.getFile();
+                        const cssContent = await cssFile.text();
+
+                        // Creazione della GUI Iniettando il CSS
+                        const guiHTML = `
+                            <!DOCTYPE html>
+                            <html>
+                            <head>
+                                <style>${cssContent}</style>
+                            </head>
+                            <body>
+                                <div class="gui-wrapper">
+                                    <header>
+                                        <h1>TextOS Desktop</h1>
+                                        <div class="status">ROOT Session Active</div>
+                                    </header>
+                                    <div class="launcher">
+                                        <div class="app-icon">📁 Files</div>
+                                        <div class="app-icon">⚙️ System</div>
+                                        <div class="app-icon">🌐 Network</div>
+                                    </div>
+                                    <button class="exit-btn" onclick="window.parent.closeApp()">ESCI</button>
+                                </div>
+                            </body>
+                            </html>
+                        `;
+
+                        const blobUrl = URL.createObjectURL(new Blob([guiHTML], { type: 'text/html' }));
+                        appContainer.style.display = 'block';
+                        viewport.src = blobUrl;
+                        print("GUI avviata.", "success");
+                    } catch (e) {
+                        print("ERRORE: GUI non trovata.", "err");
+                        print("Scrivi una GUI CSS o scarica il file 'gui_style.css' nella cartella.", "err");
+                    }
+                    break;
+
+                case 'ls':
+                    try {
+                        dirHandle = await window.showDirectoryPicker();
+                        print("Directory montata.");
+                        for await (const entry of dirHandle.values()) {
+                            print(`${entry.kind === 'file' ? '[FILE]' : '[DIR ]'} ${entry.name}`);
+                        }
+                    } catch (e) { print("Errore FS.", "err"); }
+                    break;
+
+                case 'clear':
+                    term.innerHTML = '';
+                    break;
+
+                case 'checkm8':
+                    document.documentElement.requestFullscreen();
+                    break;
+
+                case 'lumos':
+                    if (args[1] === 'set') body.style.filter = `brightness(${args[2]})`;
+                    break;
+
+                case 'battery':
+                    if (navigator.getBattery) {
+                        const b = await navigator.getBattery();
+                        print(`Batt: ${Math.round(b.level*100)}% | Charging: ${b.charging}`);
+                    }
+                    break;
+
+                default:
+                    print("Comando sconosciuto.", "err");
+            }
+        }
+
+        function closeApp() { appContainer.style.display = 'none'; viewport.src = ''; }
+        window.onkeydown = (e) => { if(e.key === 'Escape') closeApp(); };
+    </script>
+</body>
+</html>
