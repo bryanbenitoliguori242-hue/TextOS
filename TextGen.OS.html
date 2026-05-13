@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TextOS Ultimate - Local FS</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --text-color: #00ff41;
+            --font-size: 14px;
+            --overlay-opacity: 0.3;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            color: var(--text-color);
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            margin: 0; padding: 0;
+            display: flex; flex-direction: column;
+            height: 100vh; width: 100vw;
+            box-sizing: border-box;
+            overflow: hidden;
+            transition: filter 0.3s ease;
+        }
+
+        /* Overlay per garantire leggibilità sopra lo sfondo */
+        #os-interface {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+            background: rgba(0, 0, 0, var(--overlay-opacity));
+        }
+
+        /* Ecology Mode */
+        body.eco { --text-color: #006622; filter: brightness(0.5); }
+
+        /* Portrait Mode */
+        body.portrait { 
+            width: 380px; height: 680px; 
+            margin: auto; border: 8px solid #222; 
+            border-radius: 30px; 
+            position: relative;
+        }
+
+        #terminal {
+            flex-grow: 1;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            padding-bottom: 10px;
+            scrollbar-width: none;
+            text-shadow: 1px 1px 2px #000;
+        }
+        #terminal::-webkit-scrollbar { display: none; }
+
+        #input-area { 
+            display: flex; 
+            align-items: center; 
+            border-top: 1px solid rgba(0, 255, 65, 0.2); 
+            padding-top: 10px; 
+            background: rgba(0,0,0,0.5);
+        }
+        #prompt { color: #fff; font-weight: bold; margin-right: 10px; }
+        
+        input {
+            background: transparent; border: none; color: inherit;
+            font-family: inherit; font-size: var(--font-size);
+            outline: none; flex-grow: 1;
+        }
+
+        /* App Viewport */
+        #app-container {
+            display: none; position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%; background: #000; z-index: 1000;
+        }
+        iframe { width: 100%; height: 100%; border: none; }
+        .close-btn {
+            position: absolute; top: 20px; right: 20px;
+            background: #ff0000; color: white; border: none;
+            padding: 10px 15px; cursor: pointer; z-index: 1001; font-weight: bold;
+        }
+    </style>
+</head>
+<body onclick="document.getElementById('cmd').focus()">
+
+    <div id="os-interface">
+        <div id="terminal">--- TextOS Kernel v3.0 [FileSystem Enabled] ---
+Stato: PROTETTO. Digita 'start pin 2580' per sbloccare.
+---------------------------------------------------------</div>
+
+        <div id="input-area">
+            <span id="prompt">ROOT@ANDROID:~$</span>
+            <input type="text" id="cmd" autofocus spellcheck="false" autocomplete="off">
+        </div>
+    </div>
+
+    <div id="app-container">
+        <button class="close-btn" onclick="closeApp()">CHIUDI APP</button>
+        <iframe id="viewport"></iframe>
+    </div>
+
+    <script>
+        const term = document.getElementById('terminal');
+        const cmdInput = document.getElementById('cmd');
+        const appContainer = document.getElementById('app-container');
+        const viewport = document.getElementById('viewport');
+        const body = document.body;
+
+        let isUnlocked = false;
+        let apps = {};
+        let dirHandle = null;
+
+        cmdInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const val = cmdInput.value.trim();
+                if (val) processCommand(val);
+                cmdInput.value = '';
+            }
+        });
+
+        function print(text, type = '') {
+            const line = document.createElement('div');
+            line.textContent = type === 'cmd' ? `> ${text}` : text;
+            if (type === 'err') line.style.color = '#ff4444';
+            if (type === 'success') line.style.color = '#ffff00';
+            term.appendChild(line);
+            term.scrollTop = term.scrollHeight;
+        }
+
+        async function processCommand(raw) {
+            print(raw, 'cmd');
+            const args = raw.split(' ');
+            const command = args[0].toLowerCase();
+
+            // Sblocco PIN
+            if (command === 'start' && args[1] === 'pin' && args[2] === '2580') {
+                isUnlocked = true;
+                print("Kernel sbloccato. Privilegi ROOT ottenuti.", "success");
+                return;
+            }
+
+            if (!isUnlocked) {
+                print("ERRORE: Inserire PIN 'start pin 2580'", "err");
+                return;
+            }
+
+            switch(command) {
+                case 'help':
+                    print(`COMANDI:
+- checkm8                       : Fullscreen
+- install <url> name <nome>     : Installa App
+- start app <nome>              : Lancia App
+- set ecology mode on/off       : Risparmio energetico
+- lumos set <n>%                : Luminosità
+- config mode potrait/landscape : Layout
+- adb bt on                     : Bluetooth hardware scan
+- battery                       : Info batteria reale
+- vibrate                       : Test vibrazione
+- ls                            : Monta/Elenca cartella locale
+- cat <file>                    : Leggi file di testo
+- set <file> wall               : Imposta file come sfondo
+- clear                         : Pulisci schermo`);
+                    break;
+
+                case 'ls':
+                    try {
+                        if (!dirHandle) dirHandle = await window.showDirectoryPicker();
+                        print("Lettura directory...");
+                        for await (const entry of dirHandle.values()) {
+                            print(`${entry.kind === 'file' ? '[FILE]' : '[DIR ]'} ${entry.name}`);
+                        }
+                    } catch (e) { print("Errore FS: Permesso negato o non supportato.", "err"); }
+                    break;
+
+                case 'cat':
+                    if (!dirHandle) { print("Errore: Esegui 'ls' per montare la cartella.", "err"); break; }
+                    try {
+                        const fileH = await dirHandle.getFileHandle(args[1]);
+                        const file = await fileH.getFile();
+                        print(await file.text());
+                    } catch (e) { print("Errore lettura file.", "err"); }
+                    break;
+
+                case 'set':
+                    // Comando richiesto: set <nome>.png wall
+                    if (args[2] === 'wall') {
+                        if (!dirHandle) { print("Errore: Usa prima 'ls' per accedere alla cartella.", "err"); break; }
+                        try {
+                            const fileH = await dirHandle.getFileHandle(args[1]);
+                            const file = await fileH.getFile();
+                            const reader = new FileReader();
+                            reader.onload = (e) => {
+                                body.style.backgroundImage = `url('${e.target.result}')`;
+                                print(`Sfondo impostato: ${args[1]}`, "success");
+                            };
+                            reader.readAsDataURL(file);
+                        } catch (e) { print("Errore: File immagine non trovato.", "err"); }
+                    } 
+                    else if (args[1] === 'ecology') {
+                        if (args[3] === 'on') body.classList.add('eco');
+                        else body.classList.remove('eco');
+                    }
+                    break;
+
+                case 'checkm8':
+                    document.documentElement.requestFullscreen();
+                    break;
+
+                case 'install':
+                    const nIdx = args.indexOf('name');
+                    if (nIdx > 1) {
+                        apps[args[nIdx+1]] = args[1].includes('://') ? args[1] : 'https://' + args[1];
+                        print(`App '${args[nIdx+1]}' installata.`);
+                    }
+                    break;
+
+                case 'start':
+                    if (args[1] === 'app' && apps[args[2]]) {
+                        appContainer.style.display = 'block';
+                        viewport.src = apps[args[2]];
+                    }
+                    break;
+
+                case 'lumos':
+                    if (args[1] === 'set') body.style.filter = `brightness(${args[2]})`;
+                    break;
+
+                case 'config':
+                    if (args[2] === 'potrait') body.className = 'portrait';
+                    else body.className = '';
+                    break;
+
+                case 'battery':
+                    if (navigator.getBattery) {
+                        const b = await navigator.getBattery();
+                        print(`Batt: ${Math.round(b.level*100)}% | Charging: ${b.charging}`);
+                    }
+                    break;
+
+                case 'vibrate':
+                    navigator.vibrate(200);
+                    print("Vibrazione inviata.");
+                    break;
+
+                case 'clear':
+                    term.innerHTML = '';
+                    break;
+
+                default:
+                    print("Comando sconosciuto.", "err");
+            }
+        }
+
+        function closeApp() { appContainer.style.display = 'none'; viewport.src = ''; }
+        window.onkeydown = (e) => { if(e.key === 'Escape') closeApp(); };
+    </script>
+</body>
+</html>
