@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TextOS Ultimate - Windows 7 Edition</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --text-color: #00ff41;
+            --font-size: 14px;
+            --overlay-opacity: 0.3;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            color: var(--text-color);
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            margin: 0; padding: 0;
+            display: flex; flex-direction: column;
+            height: 100vh; width: 100vw;
+            box-sizing: border-box;
+            overflow: hidden;
+            transition: filter 0.3s ease;
+        }
+
+        #os-interface {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+            background: rgba(0, 0, 0, var(--overlay-opacity));
+            z-index: 1;
+        }
+
+        body.eco { --text-color: #006622; filter: brightness(0.5); }
+
+        body.portrait { 
+            width: 380px; height: 680px; 
+            margin: auto; border: 8px solid #222; 
+            border-radius: 30px; 
+            position: relative;
+        }
+
+        #terminal {
+            flex-grow: 1;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            padding-bottom: 10px;
+            scrollbar-width: none;
+            text-shadow: 1px 1px 2px #000;
+        }
+        #terminal::-webkit-scrollbar { display: none; }
+
+        #input-area { 
+            display: flex; 
+            align-items: center; 
+            border-top: 1px solid rgba(0, 255, 65, 0.2); 
+            padding-top: 10px; 
+            background: rgba(0,0,0,0.5);
+        }
+        #prompt { color: #fff; font-weight: bold; margin-right: 10px; }
+        
+        input {
+            background: transparent; border: none; color: inherit;
+            font-family: inherit; font-size: var(--font-size);
+            outline: none; flex-grow: 1;
+        }
+
+        /* Container per la GUI esterna */
+        #app-container {
+            display: none; 
+            position: fixed; 
+            top: 0; left: 0;
+            width: 100%; height: 100%; 
+            background: #000; 
+            z-index: 1000;
+        }
+        iframe { width: 100%; height: 100%; border: none; }
+        
+        /* Bottone di emergenza per chiudere la GUI se il CSS rompe il tasto interno */
+        .emergency-close {
+            position: fixed;
+            top: 5px;
+            right: 5px;
+            background: rgba(255,0,0,0.3);
+            color: white;
+            border: none;
+            font-size: 10px;
+            cursor: pointer;
+            z-index: 1002;
+            padding: 2px 5px;
+        }
+    </style>
+</head>
+<body onclick="document.getElementById('cmd').focus()">
+
+    <div id="os-interface">
+        <div id="terminal">--- TextOS Kernel v3.5 [Aero Support Active] ---
+Stato: PROTETTO. Digita 'start pin ****' per sbloccare.
+---------------------------------------------------------</div>
+
+        <div id="input-area">
+            <span id="prompt">ROOT@ANDROID:~$</span>
+            <input type="text" id="cmd" autofocus spellcheck="false" autocomplete="off">
+        </div>
+    </div>
+
+    <div id="app-container">
+        <button class="emergency-close" onclick="closeApp()">X</button>
+        <iframe id="viewport"></iframe>
+    </div>
+
+    <script>
+        const term = document.getElementById('terminal');
+        const cmdInput = document.getElementById('cmd');
+        const appContainer = document.getElementById('app-container');
+        const viewport = document.getElementById('viewport');
+        const body = document.body;
+
+        let isUnlocked = false;
+        let apps = {};
+        let dirHandle = null;
+
+        cmdInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const val = cmdInput.value.trim();
+                if (val) processCommand(val);
+                cmdInput.value = '';
+            }
+        });
+
+        function print(text, type = '') {
+            const line = document.createElement('div');
+            line.textContent = type === 'cmd' ? `> ${text}` : text;
+            if (type === 'err') line.style.color = '#ff4444';
+            if (type === 'success') line.style.color = '#ffff00';
+            term.appendChild(line);
+            term.scrollTop = term.scrollHeight;
+        }
+
+        async function processCommand(raw) {
+            print(raw, 'cmd');
+            const args = raw.split(' ');
+            const command = args[0].toLowerCase();
+
+            // Sblocco con PIN nascosto
+            if (command === 'start' && args[1] === 'pin' && args[2] === '2580') {
+                isUnlocked = true;
+                print("Kernel sbloccato. Privilegi ROOT ottenuti.", "success");
+                return;
+            }
+
+            if (!isUnlocked) {
+                print("ERRORE: Inserire PIN (start pin ****)", "err");
+                return;
+            }
+
+            switch(command) {
+                case 'help':
+                    print(`COMANDI DISPONIBILI:
+- ls                            : Seleziona cartella e elenca file
+- start_shell                   : Avvia GUI Windows 7 (richiede gui_style.css)
+- install <url> name <nome>     : Installa Web App
+- start app <nome>              : Lancia App installata
+- clear                         : Pulisci terminale
+- battery                       : Stato batteria
+- checkm8                       : Fullscreen`);
+                    break;
+
+                case 'ls':
+                    try {
+                        dirHandle = await window.showDirectoryPicker();
+                        print("Directory montata correttamente.");
+                        for await (const entry of dirHandle.values()) {
+                            print(`${entry.kind === 'file' ? '[FILE]' : '[DIR ]'} ${entry.name}`);
+                        }
+                    } catch (e) { print("Errore accesso cartella.", "err"); }
+                    break;
+
+                case 'start_shell':
+                    if (!dirHandle) {
+                        print("Errore: Usa 'ls' per montare la cartella con gui_style.css", "err");
+                        break;
+                    }
+                    try {
+                        const cssHandle = await dirHandle.getFileHandle('gui_style.css');
+                        const cssFile = await cssHandle.getFile();
+                        const cssContent = await cssFile.text();
+
+                        const guiHTML = `
+                            <!DOCTYPE html>
+                            <html>
+                            <head>
+                                <meta charset="UTF-8">
+                                <style>${cssContent}</style>
+                            </head>
+                            <body>
+                                <div class="gui-wrapper">
+                                    <header>
+                                        <h1>Computer</h1>
+                                        <div class="status">Windows 7 Professional</div>
+                                    </header>
+                                    
+                                    <div class="launcher">
+                                        <div class="app-icon"><span>Computer</span></div>
+                                        <div class="app-icon"><span>Rete</span></div>
+                                        <div class="app-icon"><span>Cestino</span></div>
+                                        <div class="app-icon"><span>Pannello di controllo</span></div>
+                                    </div>
+
+                                    <div class="taskbar">
+                                        <div class="start-button"></div>
+                                        <div style="flex-grow:1"></div>
+                                        <button class="exit-btn" onclick="window.parent.closeApp()">Arresta il sistema</button>
+                                    </div>
+                                </div>
+                            </body>
+                            </html>
+                        `;
+
+                        const blobUrl = URL.createObjectURL(new Blob([guiHTML], { type: 'text/html' }));
+                        appContainer.style.display = 'block';
+                        viewport.src = blobUrl;
+                        print("GUI Windows 7 avviata.", "success");
+                    } catch (e) {
+                        print("ERRORE: GUi non trovata.", "err");
+                        print("Crea un file 'gui_style.css' nella cartella selezionata.", "err");
+                    }
+                    break;
+
+                case 'install':
+                    const nIdx = args.indexOf('name');
+                    if (nIdx > 1) {
+                        apps[args[nIdx+1]] = args[1].includes('://') ? args[1] : 'https://' + args[1];
+                        print(`App '${args[nIdx+1]}' registrata.`);
+                    }
+                    break;
+
+                case 'start':
+                    if (args[1] === 'app' && apps[args[2]]) {
+                        appContainer.style.display = 'block';
+                        viewport.src = apps[args[2]];
+                    }
+                    break;
+
+                case 'clear': term.innerHTML = ''; break;
+                
+                case 'checkm8': document.documentElement.requestFullscreen(); break;
+
+                case 'battery':
+                    if (navigator.getBattery) {
+                        const b = await navigator.getBattery();
+                        print(`Livello: ${Math.round(b.level*100)}% | In carica: ${b.charging ? 'SI' : 'NO'}`);
+                    }
+                    break;
+
+                default:
+                    print("Comando non riconosciuto.", "err");
+            }
+        }
+
+        function closeApp() { 
+            appContainer.style.display = 'none'; 
+            viewport.src = ''; 
+        }
+        
+        window.onkeydown = (e) => { if(e.key === 'Escape') closeApp(); };
+    </script>
+</body>
+</html>
