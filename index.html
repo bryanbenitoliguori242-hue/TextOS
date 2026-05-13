@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TextOS Ultimate - Kernel v4.6 Full</title>
+    <style>
+        :root { --bg-color: #050505; --text-color: #00ff41; --font-size: 14px; }
+        body { background-color: var(--bg-color); background-size: cover; background-position: center; background-attachment: fixed; color: var(--text-color); font-family: 'Consolas', 'Monaco', monospace; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        #os-interface { flex-grow: 1; display: flex; flex-direction: column; padding: 20px; background: rgba(0,0,0,0.4); }
+        #terminal { flex-grow: 1; overflow-y: auto; white-space: pre-wrap; scrollbar-width: none; text-shadow: 1px 1px 2px #000; }
+        #terminal::-webkit-scrollbar { display: none; }
+        #input-area { display: flex; border-top: 1px solid rgba(0, 255, 65, 0.3); padding-top: 10px; background: rgba(0,0,0,0.5); }
+        #prompt { font-weight: bold; margin-right: 10px; color: #fff; }
+        input { background: transparent; border: none; color: inherit; font-family: inherit; font-size: var(--font-size); outline: none; flex-grow: 1; }
+        #app-container { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 1000; }
+        iframe { width: 100%; height: 100%; border: none; }
+        body.eco { --text-color: #006622; filter: brightness(0.5); }
+        body.portrait { width: 380px; height: 680px; margin: auto; border: 8px solid #222; border-radius: 30px; position: relative; }
+    </style>
+</head>
+<body onclick="document.getElementById('cmd').focus()">
+
+    <div id="os-interface">
+        <div id="terminal">--- TextOS Kernel v4.6 [Full Command Set] ---
+Stato: PROTETTO. Inserire PIN di sblocco per continuare.
+---------------------------------------------------------</div>
+        <div id="input-area">
+            <span id="prompt">ROOT@SYSTEM:~$</span>
+            <input type="text" id="cmd" autofocus autocomplete="off" spellcheck="false">
+        </div>
+    </div>
+
+    <div id="app-container">
+        <iframe id="viewport"></iframe>
+    </div>
+
+    <script>
+        const term = document.getElementById('terminal');
+        const cmdInput = document.getElementById('cmd');
+        const appContainer = document.getElementById('app-container');
+        const viewport = document.getElementById('viewport');
+        const body = document.body;
+
+        let isUnlocked = false;
+        let apps = {};
+        let dirHandle = null;
+
+        window.addEventListener('message', (e) => {
+            if (e.data.type === 'execute_command') processCommand(e.data.command);
+        });
+
+        cmdInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                const val = cmdInput.value.trim();
+                if (val) processCommand(val);
+                cmdInput.value = '';
+            }
+        });
+
+        function print(text, type = '') {
+            const line = document.createElement('div');
+            line.textContent = type === 'cmd' ? `> ${text}` : text;
+            if (type === 'err') line.style.color = '#ff4444';
+            if (type === 'success') line.style.color = '#ffff00';
+            term.appendChild(line);
+            term.scrollTop = term.scrollHeight;
+            return line;
+        }
+
+        async function showInstallProgress(appName) {
+            const progressLine = print("");
+            const steps = 20;
+            for (let i = 0; i <= steps; i++) {
+                const percent = Math.round((i / steps) * 100);
+                const bar = "█".repeat(i) + "░".repeat(steps - i);
+                progressLine.textContent = `Installazione [${bar}] ${percent}% - ${appName}`;
+                await new Promise(r => setTimeout(r, 100));
+            }
+            print(`App '${appName}' pronta all'uso.`, "success");
+        }
+
+        async function processCommand(raw) {
+            print(raw, 'cmd');
+            const args = raw.split(' ');
+            const command = args[0].toLowerCase();
+
+            if (command === 'start' && args[1] === 'pin' && args[2] === '2580') {
+                isUnlocked = true;
+                print("Kernel sbloccato. Privilegi elevati.", "success");
+                return;
+            }
+
+            if (!isUnlocked) { print("ERRORE: Sistema Protetto.", "err"); return; }
+
+            switch(command) {
+                case 'help':
+                    print(`COMANDI DISPONIBILI:
+- help                          : Questa lista
+- ls                            : Monta cartella locale
+- start_shell                   : Avvia GUI Windows 7 (richiede gui_style.css)
+- install <url> name <nome>     : Installa App con barra progresso
+- start app <nome>              : Lancia App installata
+- cat <file>                    : Leggi file di testo (dopo ls)
+- set ecology mode on/off       : Modalità risparmio
+- lumos set <n>                 : Luminosità (es: 0.5)
+- config mode potrait/landscape : Cambia orientamento
+- battery                       : Stato batteria
+- vibrate                       : Test vibrazione
+- clear                         : Pulisci schermo
+- exit_gui                      : Chiude la GUI attiva`);
+                    break;
+
+                case 'ls':
+                    try {
+                        dirHandle = await window.showDirectoryPicker();
+                        print("File System montato. Contenuto:");
+                        for await (const entry of dirHandle.values()) { print(`${entry.kind === 'file' ? '[FILE]' : '[DIR ]'} ${entry.name}`); }
+                    } catch (e) { print("Errore FS.", "err"); }
+                    break;
+
+                case 'install':
+                    const nameIdx = args.indexOf('name');
+                    if (nameIdx > 1 && args[1]) {
+                        apps[args[nameIdx + 1]] = args[1];
+                        await showInstallProgress(args[nameIdx + 1]);
+                    } else { print("Errore. Sintassi: install <url> name <nome>", "err"); }
+                    break;
+
+                case 'start':
+                    if (args[1] === 'app' && apps[args[2]]) {
+                        appContainer.style.display = 'block';
+                        viewport.src = apps[args[2]];
+                    } else if (args[1] === 'pin') { print("Già sbloccato."); }
+                    break;
+
+                case 'start_shell':
+                    if (!dirHandle) { print("Usa 'ls' prima.", "err"); break; }
+                    try {
+                        const cssH = await dirHandle.getFileHandle('gui_style.css');
+                        const cssF = await cssH.getFile();
+                        const cssContent = await cssF.text();
+                        const guiHTML = `<html><head><style>${cssContent}</style></head><body><div class="gui-wrapper"><header><h1>Windows 7</h1></header><div class="launcher"><div class="app-icon" onclick="window.parent.postMessage({type:'execute_command', command:'battery'}, '*')">🔋 Stato</div><div class="app-icon" onclick="installPrompt()">🛒 Store</div></div><div class="taskbar"><div class="start-button"></div><button class="exit-btn" onclick="window.parent.postMessage({type:'execute_command', command:'exit_gui'}, '*')">CHIUDI</button></div></div><script>function installPrompt(){const u=prompt("URL:");const n=prompt("Nome:");if(u&&n)window.parent.postMessage({type:'execute_command',command:'install '+u+' name '+n},'*');}<\/script></body></html>`;
+                        viewport.srcdoc = guiHTML; appContainer.style.display = 'block';
+                    } catch (e) { print("File 'gui_style.css' non trovato.", "err"); }
+                    break;
+
+                case 'cat':
+                    if (!dirHandle) { print("Usa 'ls'.", "err"); break; }
+                    try {
+                        const fileH = await dirHandle.getFileHandle(args[1]);
+                        const file = await fileH.getFile();
+                        print(await file.text());
+                    } catch (e) { print("File non trovato.", "err"); }
+                    break;
+
+                case 'set':
+                    if (args[1] === 'ecology') {
+                        if (args[3] === 'on') body.classList.add('eco');
+                        else body.classList.remove('eco');
+                    }
+                    break;
+
+                case 'lumos':
+                    if (args[1] === 'set') body.style.filter = `brightness(${args[2]})`;
+                    break;
+
+                case 'config':
+                    if (args[2] === 'potrait') body.className = 'portrait';
+                    else body.className = '';
+                    break;
+
+                case 'battery':
+                    if (navigator.getBattery) {
+                        const b = await navigator.getBattery();
+                        print(`BATTERIA: ${Math.round(b.level * 100)}% [${b.charging ? 'IN CARICA' : 'SCARICA'}]`);
+                    }
+                    break;
+
+                case 'vibrate': navigator.vibrate(200); print("Vibrazione eseguita."); break;
+                case 'exit_gui': appContainer.style.display = 'none'; break;
+                case 'clear': term.innerHTML = ''; break;
+                default: print("Comando non riconosciuto. Digita 'help'.", "err");
+            }
+        }
+    </script>
+</body>
+</html>
