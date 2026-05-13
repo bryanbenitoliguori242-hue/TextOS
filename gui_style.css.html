@@ -1,0 +1,176 @@
+
+/* TextOS Aero Shell - Windows 7 Style
+   Replica fedele dell'interfaccia Aero Glass
+*/
+
+:root {
+    --taskbar-height: 40px;
+    --aero-bg: rgba(150, 190, 230, 0.4);
+    --aero-border: rgba(255, 255, 255, 0.4);
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    /* Sfondo tipico Windows 7 (Sfumatura blu/azzurra) */
+    background: radial-gradient(circle at center, #2e7bb0 0%, #0a2e47 100%);
+    background-attachment: fixed;
+    font-family: 'Segoe UI', Tahoma, Helvetica, Sans-Serif;
+    overflow: hidden;
+    height: 100vh;
+}
+
+/* Effetto Aero Glass per il contenitore */
+.gui-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    position: relative;
+}
+
+/* Barra del Titolo (Finestra) */
+header {
+    background: linear-gradient(to bottom, 
+        rgba(255, 255, 255, 0.5) 0%, 
+        rgba(120, 170, 210, 0.4) 50%, 
+        rgba(30, 90, 150, 0.3) 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 8px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+header h1 {
+    margin: 0;
+    font-size: 13px;
+    color: #fff;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 1px 1px 2px rgba(0,0,0,0.5);
+    font-weight: normal;
+}
+
+.status {
+    font-size: 11px;
+    color: #d1e8ff;
+}
+
+/* Icone Desktop */
+.launcher {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    padding: 10px;
+    gap: 10px;
+}
+
+.app-icon {
+    width: 75px;
+    height: 85px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    cursor: default;
+    transition: background 0.1s;
+}
+
+.app-icon:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: inset 0 0 5px rgba(255, 255, 255, 0.2);
+}
+
+/* Placeholder icone (stile Windows 7) */
+.app-icon::before {
+    content: '';
+    width: 48px;
+    height: 48px;
+    margin-bottom: 4px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+/* Icona Computer */
+.app-icon:nth-child(1)::before {
+    background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="8" width="36" height="26" rx="2" fill="%23eee" stroke="%23333"/><rect x="8" y="10" width="32" height="22" fill="%232e7bb0"/><path d="M18 34h12l2 6H16z" fill="%23999"/></svg>');
+}
+/* Icona Rete */
+.app-icon:nth-child(2)::before {
+    background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="18" fill="%234caf50" stroke="%23fff"/><path d="M12 24h24M24 12v24" stroke="%23fff" stroke-width="2"/></svg>');
+}
+/* Icona Pannello di controllo */
+.app-icon:nth-child(3)::before {
+    background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="10" width="28" height="28" rx="5" fill="%23777"/><circle cx="24" cy="24" r="8" fill="%23ccc"/></svg>');
+}
+
+.app-icon span {
+    color: white;
+    font-size: 11px;
+    text-shadow: 1px 1px 2px #000;
+    text-align: center;
+    padding: 2px;
+}
+
+/* Taskbar (Barra delle applicazioni) */
+.taskbar {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: var(--taskbar-height);
+    background: linear-gradient(to bottom, 
+        rgba(100, 150, 200, 0.4) 0%, 
+        rgba(20, 50, 80, 0.6) 100%);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    box-sizing: border-box;
+}
+
+/* Bottone Start (Orb) */
+.start-button {
+    width: 36px;
+    height: 36px;
+    background: radial-gradient(circle at center, #5db2ff 0%, #215d9c 100%);
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.4);
+    box-shadow: 0 0 10px rgba(93, 178, 255, 0.6), inset 0 0 5px white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+}
+
+.start-button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 15px rgba(93, 178, 255, 0.9);
+}
+
+/* Bottone Spegni (nascosto nell'interfaccia ma stilizzato) */
+.exit-btn {
+    margin-left: auto;
+    background: linear-gradient(to bottom, #f08080, #8b0000);
+    border: 1px solid #500;
+    color: white;
+    font-size: 11px;
+    padding: 3px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+}
+
+.exit-btn:hover {
+    filter: brightness(1.2);
+}
